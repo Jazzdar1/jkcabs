@@ -1854,7 +1854,13 @@
                 <h4 class="text-base font-bold text-white flex items-center gap-2">
                   <i class="fa-solid fa-boxes-stacked text-amber-400"></i> Full Tourism Inventory Control
                 </h4>
-                <p class="text-xs text-slate-400">Manage Tour Packages, Hotels, Houseboats & Sightseeing tours. All changes are live on the public site.</p>
+                <p class="text-xs text-slate-400">Add, Edit, Delete — Packages, Hotels, Houseboats & Sightseeing. Changes go live on the public site immediately.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="window.openInventoryModal('package')" class="px-3 py-2 rounded-xl bg-saffron-500 hover:bg-saffron-600 text-pine-950 font-black text-[11px]"><i class="fa-solid fa-plus mr-1"></i>Package</button>
+                <button type="button" onclick="window.openInventoryModal('hotel')" class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-pine-950 font-black text-[11px]"><i class="fa-solid fa-plus mr-1"></i>Hotel</button>
+                <button type="button" onclick="window.openInventoryModal('houseboat')" class="px-3 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-pine-950 font-black text-[11px]"><i class="fa-solid fa-plus mr-1"></i>Houseboat</button>
+                <button type="button" onclick="window.openInventoryModal('sightseeing')" class="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-pine-950 font-black text-[11px]"><i class="fa-solid fa-plus mr-1"></i>Sightseeing</button>
               </div>
             </div>
 
@@ -1878,11 +1884,10 @@
             </div>
 
             <div class="p-5 rounded-3xl bg-pine-900 border border-pine-800 space-y-4">
-              <h5 class="text-xs font-bold text-white uppercase tracking-wider">Quick Inventory Overview (Read + Delete)</h5>
-              <div id="adm-inventory-list" class="space-y-2 max-h-96 overflow-y-auto text-xs">
+              <h5 class="text-xs font-bold text-white uppercase tracking-wider">All Inventory — Add / Edit / Delete</h5>
+              <div id="adm-inventory-list" class="space-y-2 max-h-[28rem] overflow-y-auto text-xs">
                 <!-- filled by JS -->
               </div>
-              <p class="text-[11px] text-slate-400">To add or deeply edit items, use the Data Vault export/import or contact the platform developer for full CRUD forms. Counts and deletes are live.</p>
             </div>
           </div>
 
@@ -2738,6 +2743,54 @@
 
       </div>
 
+    </div>
+  </div>
+
+
+  <!-- ================= ADMIN MODAL: INVENTORY ADD/EDIT ================= -->
+  <div id="inventory-modal" class="fixed inset-0 z-50 hidden bg-black/85 backdrop-blur-md flex items-center justify-center p-4 no-print">
+    <div class="bg-pine-900 border border-pine-750 rounded-3xl w-full max-w-lg p-6 relative max-h-[92vh] overflow-y-auto">
+      <button type="button" onclick="window.closeInventoryModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i class="fa-solid fa-xmark text-base"></i>
+      </button>
+      <h3 id="inventory-modal-title" class="text-base font-bold text-white mb-3">Add Inventory Item</h3>
+      <input type="hidden" id="inv-edit-type" value="">
+      <input type="hidden" id="inv-edit-id" value="">
+      <form onsubmit="window.handleSaveInventory(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Title / Name *</label>
+          <input type="text" id="inv-title" required class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white" placeholder="e.g. Kashmir Family Delight">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-400 uppercase mb-1">Price (₹) *</label>
+            <input type="number" id="inv-price" required min="0" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white" placeholder="28900">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-400 uppercase mb-1">Duration / Category</label>
+            <input type="text" id="inv-meta" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white" placeholder="6 Days / 5 Nights or 3-Star">
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Location / Lake / For Whom</label>
+          <input type="text" id="inv-location" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white" placeholder="Srinagar / Dal Lake / Families">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Includes / Amenities</label>
+          <textarea id="inv-includes" rows="2" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white" placeholder="Transfers, hotel, meals..."></textarea>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Highlights / Notes</label>
+          <textarea id="inv-notes" rows="2" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white" placeholder="Key attractions..."></textarea>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Image URL</label>
+          <input type="url" id="inv-image" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white text-[11px]" placeholder="https://...">
+        </div>
+        <button type="submit" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-pine-950 font-black uppercase text-xs">
+          <i class="fa-solid fa-floppy-disk mr-1"></i> Save Item
+        </button>
+      </form>
     </div>
   </div>
 
@@ -5620,61 +5673,177 @@
       const list = document.getElementById("adm-inventory-list");
       if (!list) return;
 
-      let html = '';
+      let html = "";
       (packages || []).forEach(p => {
         html += `<div class="p-3 rounded-xl bg-pine-950 border border-pine-850 flex items-center justify-between gap-2">
-          <div><span class="text-saffron-400 font-bold text-[10px] uppercase">Package</span><strong class="text-white block text-sm">${window.escapeHtml(p.title)}</strong><span class="text-slate-400 text-[11px]">₹${p.price.toLocaleString()} • ${window.escapeHtml(p.duration)}</span></div>
-          <button onclick="window.adminDeletePackage('${p.id}')" class="px-2 py-1 rounded bg-red-950 border border-red-800 text-red-400 text-[10px]"><i class="fa-solid fa-trash"></i></button>
-        </div>`;
+          <div class="min-w-0"><span class="text-saffron-400 font-bold text-[10px] uppercase">Package</span>
+          <strong class="text-white block text-sm truncate">${window.escapeHtml(p.title)}</strong>
+          <span class="text-slate-400 text-[11px]">₹${Number(p.price||0).toLocaleString()} • ${window.escapeHtml(p.duration||"")}</span></div>
+          <div class="flex gap-1 shrink-0">
+            <button type="button" onclick="window.openInventoryModal('package','${p.id}')" class="px-2 py-1 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[10px] font-bold"><i class="fa-solid fa-pen"></i></button>
+            <button type="button" onclick="window.adminDeletePackage('${p.id}')" class="px-2 py-1 rounded bg-red-950 border border-red-800 text-red-400 text-[10px]"><i class="fa-solid fa-trash"></i></button>
+          </div></div>`;
       });
       (hotels || []).forEach(h => {
         html += `<div class="p-3 rounded-xl bg-pine-950 border border-pine-850 flex items-center justify-between gap-2">
-          <div><span class="text-emerald-400 font-bold text-[10px] uppercase">Hotel</span><strong class="text-white block text-sm">${window.escapeHtml(h.name)}</strong><span class="text-slate-400 text-[11px]">${window.escapeHtml(h.location)} • from ₹${h.priceFrom.toLocaleString()}</span></div>
-          <button onclick="window.adminDeleteHotel('${h.id}')" class="px-2 py-1 rounded bg-red-950 border border-red-800 text-red-400 text-[10px]"><i class="fa-solid fa-trash"></i></button>
-        </div>`;
+          <div class="min-w-0"><span class="text-emerald-400 font-bold text-[10px] uppercase">Hotel</span>
+          <strong class="text-white block text-sm truncate">${window.escapeHtml(h.name)}</strong>
+          <span class="text-slate-400 text-[11px]">${window.escapeHtml(h.location||"")} • from ₹${Number(h.priceFrom||0).toLocaleString()}</span></div>
+          <div class="flex gap-1 shrink-0">
+            <button type="button" onclick="window.openInventoryModal('hotel','${h.id}')" class="px-2 py-1 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[10px] font-bold"><i class="fa-solid fa-pen"></i></button>
+            <button type="button" onclick="window.adminDeleteHotel('${h.id}')" class="px-2 py-1 rounded bg-red-950 border border-red-800 text-red-400 text-[10px]"><i class="fa-solid fa-trash"></i></button>
+          </div></div>`;
       });
       (houseboats || []).forEach(hb => {
         html += `<div class="p-3 rounded-xl bg-pine-950 border border-pine-850 flex items-center justify-between gap-2">
-          <div><span class="text-cyan-400 font-bold text-[10px] uppercase">Houseboat</span><strong class="text-white block text-sm">${window.escapeHtml(hb.name)}</strong><span class="text-slate-400 text-[11px]">${window.escapeHtml(hb.lake)} • from ₹${hb.priceFrom.toLocaleString()}</span></div>
-          <button onclick="window.adminDeleteHouseboat('${hb.id}')" class="px-2 py-1 rounded bg-red-950 border border-red-800 text-red-400 text-[10px]"><i class="fa-solid fa-trash"></i></button>
-        </div>`;
+          <div class="min-w-0"><span class="text-cyan-400 font-bold text-[10px] uppercase">Houseboat</span>
+          <strong class="text-white block text-sm truncate">${window.escapeHtml(hb.name)}</strong>
+          <span class="text-slate-400 text-[11px]">${window.escapeHtml(hb.lake||"")} • from ₹${Number(hb.priceFrom||0).toLocaleString()}</span></div>
+          <div class="flex gap-1 shrink-0">
+            <button type="button" onclick="window.openInventoryModal('houseboat','${hb.id}')" class="px-2 py-1 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[10px] font-bold"><i class="fa-solid fa-pen"></i></button>
+            <button type="button" onclick="window.adminDeleteHouseboat('${hb.id}')" class="px-2 py-1 rounded bg-red-950 border border-red-800 text-red-400 text-[10px]"><i class="fa-solid fa-trash"></i></button>
+          </div></div>`;
       });
       (sightseeing || []).forEach(s => {
         html += `<div class="p-3 rounded-xl bg-pine-950 border border-pine-850 flex items-center justify-between gap-2">
-          <div><span class="text-amber-400 font-bold text-[10px] uppercase">Sightseeing</span><strong class="text-white block text-sm">${window.escapeHtml(s.title)}</strong><span class="text-slate-400 text-[11px]">₹${s.price.toLocaleString()} • ${window.escapeHtml(s.duration)}</span></div>
-          <button onclick="window.adminDeleteSightseeing('${s.id}')" class="px-2 py-1 rounded bg-red-950 border border-red-800 text-red-400 text-[10px]"><i class="fa-solid fa-trash"></i></button>
-        </div>`;
+          <div class="min-w-0"><span class="text-amber-400 font-bold text-[10px] uppercase">Sightseeing</span>
+          <strong class="text-white block text-sm truncate">${window.escapeHtml(s.title||s.name||"")}</strong>
+          <span class="text-slate-400 text-[11px]">₹${Number(s.price||s.priceFrom||0).toLocaleString()}</span></div>
+          <div class="flex gap-1 shrink-0">
+            <button type="button" onclick="window.openInventoryModal('sightseeing','${s.id}')" class="px-2 py-1 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[10px] font-bold"><i class="fa-solid fa-pen"></i></button>
+            <button type="button" onclick="window.adminDeleteSightseeing('${s.id}')" class="px-2 py-1 rounded bg-red-950 border border-red-800 text-red-400 text-[10px]"><i class="fa-solid fa-trash"></i></button>
+          </div></div>`;
       });
-      list.innerHTML = html || '<div class="text-slate-400 text-center py-6">Inventory empty</div>';
+      if (!html) html = `<div class="p-6 text-center text-slate-400">No inventory yet. Use + Package / Hotel / Houseboat / Sightseeing to add.</div>`;
+      list.innerHTML = html;
+    };
+
+    window.openInventoryModal = function(type, id) {
+      document.getElementById("inv-edit-type").value = type;
+      document.getElementById("inv-edit-id").value = id || "";
+      const titleEl = document.getElementById("inventory-modal-title");
+      const labels = { package: "Package", hotel: "Hotel", houseboat: "Houseboat", sightseeing: "Sightseeing" };
+      titleEl.textContent = (id ? "Edit " : "Add ") + (labels[type] || "Item");
+
+      // clear
+      document.getElementById("inv-title").value = "";
+      document.getElementById("inv-price").value = "";
+      document.getElementById("inv-meta").value = "";
+      document.getElementById("inv-location").value = "";
+      document.getElementById("inv-includes").value = "";
+      document.getElementById("inv-notes").value = "";
+      document.getElementById("inv-image").value = "";
+
+      if (id) {
+        let item = null;
+        if (type === "package") item = (packages || []).find(x => x.id === id);
+        if (type === "hotel") item = (hotels || []).find(x => x.id === id);
+        if (type === "houseboat") item = (houseboats || []).find(x => x.id === id);
+        if (type === "sightseeing") item = (sightseeing || []).find(x => x.id === id);
+        if (item) {
+          document.getElementById("inv-title").value = item.title || item.name || "";
+          document.getElementById("inv-price").value = item.price || item.priceFrom || 0;
+          document.getElementById("inv-meta").value = item.duration || item.category || item.rooms || "";
+          document.getElementById("inv-location").value = item.location || item.lake || item.forWhom || "";
+          document.getElementById("inv-includes").value = item.includes || item.amenities || "";
+          document.getElementById("inv-notes").value = item.highlights || item.notes || "";
+          document.getElementById("inv-image").value = item.image || "";
+        }
+      }
+      document.getElementById("inventory-modal").classList.remove("hidden");
+    };
+
+    window.closeInventoryModal = function() {
+      document.getElementById("inventory-modal")?.classList.add("hidden");
+    };
+
+    window.handleSaveInventory = function(e) {
+      e.preventDefault();
+      const type = document.getElementById("inv-edit-type").value;
+      const id = document.getElementById("inv-edit-id").value;
+      const title = document.getElementById("inv-title").value.trim();
+      const price = parseInt(document.getElementById("inv-price").value, 10) || 0;
+      const meta = document.getElementById("inv-meta").value.trim();
+      const location = document.getElementById("inv-location").value.trim();
+      const includes = document.getElementById("inv-includes").value.trim();
+      const notes = document.getElementById("inv-notes").value.trim();
+      const image = document.getElementById("inv-image").value.trim() || "https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=600&q=80";
+
+      if (type === "package") {
+        const data = { title, duration: meta || "Custom", forWhom: location || "All travelers", price, includes, highlights: notes, image, category: "custom" };
+        if (id) {
+          const i = packages.findIndex(x => x.id === id);
+          if (i >= 0) packages[i] = { ...packages[i], ...data };
+        } else {
+          packages.unshift({ id: "pkg-" + Date.now(), ...data });
+        }
+        window.renderPackages && window.renderPackages();
+      } else if (type === "hotel") {
+        const data = { name: title, location: location || "J&K", category: meta || "Hotel", priceFrom: price, rooms: meta || "Deluxe", amenities: includes, image, notes };
+        if (id) {
+          const i = hotels.findIndex(x => x.id === id);
+          if (i >= 0) hotels[i] = { ...hotels[i], ...data };
+        } else {
+          hotels.unshift({ id: "htl-" + Date.now(), ...data });
+        }
+        window.renderHotels && window.renderHotels();
+      } else if (type === "houseboat") {
+        const data = { name: title, lake: location || "Dal Lake", category: meta || "Deluxe", priceFrom: price, capacity: meta || "4 Guests", includes, image, notes };
+        if (id) {
+          const i = houseboats.findIndex(x => x.id === id);
+          if (i >= 0) houseboats[i] = { ...houseboats[i], ...data };
+        } else {
+          houseboats.unshift({ id: "hb-" + Date.now(), ...data });
+        }
+        window.renderHouseboats && window.renderHouseboats();
+      } else if (type === "sightseeing") {
+        const data = { title, name: title, duration: meta || "Full Day", price, priceFrom: price, includes, highlights: notes, location, image };
+        if (id) {
+          const i = sightseeing.findIndex(x => x.id === id);
+          if (i >= 0) sightseeing[i] = { ...sightseeing[i], ...data };
+        } else {
+          sightseeing.unshift({ id: "ss-" + Date.now(), ...data });
+        }
+        window.renderSightseeing && window.renderSightseeing();
+      }
+
+      saveState();
+      window.renderInventoryAdmin();
+      window.closeInventoryModal();
+      window.showToast("Inventory item saved — live on public site", "success");
     };
 
     window.adminDeletePackage = function(id) {
+      if (!confirm("Delete this package?")) return;
       packages = (packages || []).filter(p => p.id !== id);
-      localStorage.setItem("jk_packages", JSON.stringify(packages));
-      window.renderPackages();
+      saveState();
+      window.renderPackages && window.renderPackages();
       window.renderInventoryAdmin();
-      window.showToast("Package removed", "info");
+      window.showToast("Package deleted", "info");
     };
     window.adminDeleteHotel = function(id) {
+      if (!confirm("Delete this hotel?")) return;
       hotels = (hotels || []).filter(h => h.id !== id);
-      localStorage.setItem("jk_hotels", JSON.stringify(hotels));
-      window.renderHotels();
+      saveState();
+      window.renderHotels && window.renderHotels();
       window.renderInventoryAdmin();
-      window.showToast("Hotel removed", "info");
+      window.showToast("Hotel deleted", "info");
     };
     window.adminDeleteHouseboat = function(id) {
+      if (!confirm("Delete this houseboat?")) return;
       houseboats = (houseboats || []).filter(h => h.id !== id);
-      localStorage.setItem("jk_houseboats", JSON.stringify(houseboats));
-      window.renderHouseboats();
+      saveState();
+      window.renderHouseboats && window.renderHouseboats();
       window.renderInventoryAdmin();
-      window.showToast("Houseboat removed", "info");
+      window.showToast("Houseboat deleted", "info");
     };
     window.adminDeleteSightseeing = function(id) {
+      if (!confirm("Delete this sightseeing tour?")) return;
       sightseeing = (sightseeing || []).filter(s => s.id !== id);
-      localStorage.setItem("jk_sightseeing", JSON.stringify(sightseeing));
-      window.renderSightseeing();
+      saveState();
+      window.renderSightseeing && window.renderSightseeing();
       window.renderInventoryAdmin();
-      window.showToast("Sightseeing tour removed", "info");
+      window.showToast("Sightseeing deleted", "info");
     };
 
     window.renderAuditLogTable = function() {
