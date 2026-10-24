@@ -2127,7 +2127,7 @@
 
       <h3 class="text-xl font-black font-display text-white">2-Factor Reservation Security</h3>
       <p class="text-xs text-slate-300 mt-1">
-        To prevent forged reservations, enter the 4-digit verification code transmitted to <strong id="otp-phone-display" class="text-saffron-400 font-mono">+91 98201 44550</strong>.
+        Demo mode: OTP is shown below on this screen (real SMS needs an SMS API). Enter the 4-digit code for <strong id="otp-phone-display" class="text-saffron-400 font-mono">+91 98201 44550</strong>.
       </p>
 
       <!-- Simulated Floating Phone Notification Banner -->
@@ -2139,7 +2139,7 @@
           <span class="text-[9px] text-slate-500">Just Now</span>
         </div>
         <p class="text-[11px] text-white">
-          "jandkcabs Dispatch: Your reservation verification code is <strong id="simulated-otp-code" class="text-saffron-400 font-mono font-black text-sm">4829</strong>. Valid for 5 minutes. Do not share."
+          "DEMO — Your OTP is <strong id="simulated-otp-code" class="text-saffron-400 font-mono font-black text-sm">4829</strong>. Valid for 5 minutes. Do not share."
         </p>
       </div>
 
@@ -4669,9 +4669,9 @@
         zoomControl: true
       });
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-        maxZoom: 18
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19
       }).addTo(adminMap);
 
       const checkpoints = [
@@ -5441,7 +5441,7 @@
 
       const modal = document.getElementById("booking-otp-modal");
       if (modal) modal.classList.remove("hidden");
-      window.showToast(`Verification code transmitted to ${booking.phone}`, "info");
+      window.showToast(`Demo OTP shown on screen for ${booking.phone} (not real SMS)`, "info");
       window.logSecurityEvent("OTP_DISPATCHED", booking.phone, booking.id, "CHALLENGE_ISSUED");
     };
 
