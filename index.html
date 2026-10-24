@@ -32,7 +32,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <!-- Firebase for live multi-device booking sync (free Spark plan) -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
   <!-- Custom Kashmiri Theme Config -->
@@ -3296,9 +3296,9 @@
 
 
     /* =============================================================
-       FIREBASE LIVE SYNC (multi-device bookings — free Spark plan)
+       FIREBASE REALTIME DATABASE LIVE SYNC (multi-device bookings)
        1. Create project: https://console.firebase.google.com
-       2. Build → Firestore Database → Create (start in test mode)
+       2. Build → Realtime Database → Create (start in test mode)
        3. Project settings → General → Your apps → Web → copy config
        4. Paste firebaseConfig values below
        Leave apiKey empty to use localStorage only (single device)
@@ -3306,6 +3306,7 @@
     const firebaseConfig = {
       apiKey: "AIzaSyDub7_648f0MMLOpu4TVbuyquIrv7tmGQI",
       authDomain: "jankcabs.firebaseapp.com",
+      databaseURL: "https://jankcabs-default-rtdb.firebaseio.com",
       projectId: "jankcabs",
       storageBucket: "jankcabs.firebasestorage.app",
       messagingSenderId: "174729796794",
@@ -3327,9 +3328,10 @@
         if (!firebase.apps.length) {
           firebase.initializeApp(firebaseConfig);
         }
-        db = firebase.firestore();
+        // Realtime Database (simpler rules than Firestore)
+        db = firebase.database();
         firebaseEnabled = true;
-        console.info("[jandkcabs] Firebase connected — live multi-device sync ON.");
+        console.info("[jandkcabs] Firebase RTDB connected — live sync ON.");
         return true;
       } catch (e) {
         console.warn("[jandkcabs] Firebase init failed:", e);
@@ -3401,15 +3403,21 @@
         return;
       }
       try {
-        await db.collection("bookings").doc(String(b.id)).set(bookingToDoc(b), { merge: true });
+        const safeId = String(b.id).replace(/[.#$\[\]]/g, "_");
+        await db.ref("bookings/" + safeId).set(bookingToDoc(b));
         console.info("[firebase] booking saved:", b.id);
         if (typeof window.showToast === "function") {
           window.showToast("Booking synced to cloud ✓", "success");
         }
       } catch (e) {
         console.error("[firebase] push booking FAILED:", e);
+        const msg = (e && e.message) ? e.message : String(e);
+        let tip = msg;
+        if (/permission|PERMISSION_DENIED|insufficient/i.test(msg)) {
+          tip = "Permission denied. Firebase → Realtime Database → Rules → set read/write true → Publish";
+        }
         if (typeof window.showToast === "function") {
-          window.showToast("Cloud sync failed: " + (e.message || e), "error");
+          window.showToast(tip, "error");
         }
       }
     }
@@ -3417,7 +3425,8 @@
     async function cloudDeleteBooking(id) {
       if (!firebaseEnabled || !db || !id) return;
       try {
-        await db.collection("bookings").doc(id).delete();
+        const safeId = String(id).replace(/[.#$\[\]]/g, "_");
+        await db.ref("bookings/" + safeId).remove();
       } catch (e) {
         console.warn("[firebase] delete booking:", e);
       }
@@ -3426,19 +3435,14 @@
     async function cloudFetchBookings() {
       if (!firebaseEnabled || !db) return null;
       try {
-        const snap = await db.collection("bookings").orderBy("bookedAt", "desc").get();
-        return snap.docs.map(d => docToBooking(d.data())).filter(Boolean);
+        const snap = await db.ref("bookings").once("value");
+        const val = snap.val() || {};
+        const list = Object.keys(val).map(k => docToBooking(val[k])).filter(Boolean);
+        list.sort((a, b) => String(b.bookedAt || "").localeCompare(String(a.bookedAt || "")));
+        return list;
       } catch (e) {
-        // Fallback without orderBy if index missing
-        try {
-          const snap = await db.collection("bookings").get();
-          const list = snap.docs.map(d => docToBooking(d.data())).filter(Boolean);
-          list.sort((a, b) => String(b.bookedAt || "").localeCompare(String(a.bookedAt || "")));
-          return list;
-        } catch (e2) {
-          console.warn("[firebase] fetch bookings:", e2);
-          return null;
-        }
+        console.warn("[firebase] fetch bookings:", e);
+        return null;
       }
     }
 
@@ -3455,26 +3459,27 @@
 
     function cloudSubscribeBookings() {
       if (!firebaseEnabled || !db) return;
-      if (_bookingsUnsub) { try { _bookingsUnsub(); } catch (e) {} }
-      _bookingsUnsub = db.collection("bookings").onSnapshot(
-        (snap) => {
-          const list = snap.docs.map(d => docToBooking(d.data())).filter(Boolean);
-          list.sort((a, b) => String(b.bookedAt || "").localeCompare(String(a.bookedAt || "")));
-          bookings = list;
-          try { localStorage.setItem("jk_bookings", JSON.stringify(bookings)); } catch (e) {}
-          if (typeof window.renderAdminDashboard === "function") window.renderAdminDashboard();
-          if (typeof window.updateBookingsCountBadge === "function") window.updateBookingsCountBadge();
-          if (typeof window.renderCustomerPortal === "function" && currentCustomer) window.renderCustomerPortal();
-        },
-        (err) => console.warn("[firebase] snapshot error:", err)
-      );
+      if (_bookingsUnsub) { try { db.ref("bookings").off("value", _bookingsUnsub); } catch (e) {} }
+      _bookingsUnsub = function(snap) {
+        const val = snap.val() || {};
+        const list = Object.keys(val).map(k => docToBooking(val[k])).filter(Boolean);
+        list.sort((a, b) => String(b.bookedAt || "").localeCompare(String(a.bookedAt || "")));
+        bookings = list;
+        try { localStorage.setItem("jk_bookings", JSON.stringify(bookings)); } catch (e) {}
+        if (typeof window.renderAdminDashboard === "function") window.renderAdminDashboard();
+        if (typeof window.updateBookingsCountBadge === "function") window.updateBookingsCountBadge();
+        if (typeof window.renderCustomerPortal === "function" && currentCustomer) window.renderCustomerPortal();
+      };
+      db.ref("bookings").on("value", _bookingsUnsub, function(err) {
+        console.warn("[firebase] RTDB listen error:", err);
+      });
     }
 
     async function cloudPushDriver(d) {
       if (!firebaseEnabled || !db || !d) return;
       try {
-        const key = ((d.phone || "").replace(/\D/g, "")) || d.license || d.name;
-        await db.collection("drivers").doc(String(key)).set({
+        const key = ((d.phone || "").replace(/\D/g, "")) || d.license || d.name || "driver";
+        await db.ref("drivers/" + key).set({
           phone: d.phone || "",
           name: d.name || "",
           license: d.license || "",
@@ -3485,7 +3490,7 @@
           photo: d.photo || "",
           pin: d.pin || "1234",
           updatedAt: new Date().toISOString()
-        }, { merge: true });
+        });
       } catch (e) {
         console.warn("[firebase] push driver:", e);
       }
