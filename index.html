@@ -3296,20 +3296,20 @@
         destination: b.destination || "",
         vehicle: b.vehicle || "",
         datetime: b.datetime || "",
-        fare: b.fare || 0,
-        baseFare: b.baseFare || null,
-        addonsCost: b.addonsCost || null,
+        fare: Number(b.fare) || 0,
+        baseFare: b.baseFare != null ? Number(b.baseFare) : null,
+        addonsCost: b.addonsCost != null ? Number(b.addonsCost) : null,
         status: b.status || "Pending",
         driver: b.driver || "Awaiting assignment",
         assignedDriverId: b.assignedDriverId || null,
-        addons: b.addons || [],
+        addons: Array.isArray(b.addons) ? b.addons : [],
         pickupAddress: b.pickupAddress || "",
         dropAddress: b.dropAddress || "",
         notes: b.notes || "",
         bookedAt: b.bookedAt || new Date().toISOString(),
         approvedAt: b.approvedAt || null,
         approvedBy: b.approvedBy || null,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        updatedAt: new Date().toISOString()
       };
     }
 
@@ -3342,11 +3342,22 @@
     }
 
     async function cloudPushBooking(b) {
-      if (!firebaseEnabled || !db || !b || !b.id) return;
+      if (!b || !b.id) return;
+      if (!firebaseEnabled || !db) {
+        console.warn("[firebase] push skipped — not connected");
+        return;
+      }
       try {
-        await db.collection("bookings").doc(b.id).set(bookingToDoc(b), { merge: true });
+        await db.collection("bookings").doc(String(b.id)).set(bookingToDoc(b), { merge: true });
+        console.info("[firebase] booking saved:", b.id);
+        if (typeof window.showToast === "function") {
+          window.showToast("Booking synced to cloud ✓", "success");
+        }
       } catch (e) {
-        console.warn("[firebase] push booking:", e);
+        console.error("[firebase] push booking FAILED:", e);
+        if (typeof window.showToast === "function") {
+          window.showToast("Cloud sync failed: " + (e.message || e), "error");
+        }
       }
     }
 
@@ -3420,7 +3431,7 @@
           status: d.status || "Active",
           photo: d.photo || "",
           pin: d.pin || "1234",
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          updatedAt: new Date().toISOString()
         }, { merge: true });
       } catch (e) {
         console.warn("[firebase] push driver:", e);
@@ -4154,6 +4165,11 @@
       // Portal-specific init
       if (pageId === "admin") {
         window.checkAdminSessionState();
+        if (typeof firebaseEnabled !== "undefined" && firebaseEnabled && typeof cloudSyncBookingsFromCloud === "function") {
+          cloudSyncBookingsFromCloud().then(() => {
+            if (typeof window.renderAdminDashboard === "function") window.renderAdminDashboard();
+          });
+        }
       } else if (pageId === "driver") {
         window.checkDriverSessionState();
       } else if (pageId === "customer") {
@@ -4241,6 +4257,14 @@
         lastAdminActivity = Date.now();
         window.startInactivityTracker();
         window.checkAdminSessionState();
+        if (typeof firebaseEnabled !== "undefined" && firebaseEnabled && typeof cloudSyncBookingsFromCloud === "function") {
+          cloudSyncBookingsFromCloud().then(() => {
+            if (typeof window.renderAdminDashboard === "function") window.renderAdminDashboard();
+            window.showToast("Loaded bookings from cloud", "info");
+          });
+        } else {
+          window.showToast("Cloud sync OFF — only this device data is visible", "info");
+        }
         window.logSecurityEvent("ADMIN_LOGIN_SUCCESS", user, "AUTH_GATE", "VERIFIED");
         window.showToast("Admin credentials verified! Welcome to Control Center.", "success");
       } else {
