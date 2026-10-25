@@ -2901,6 +2901,65 @@
     </div>
   </div>
 
+  <!-- ================= ENQUIRY MODAL: Hotels / Houseboats / Packages ================= -->
+  <div id="enquiry-modal" class="fixed inset-0 z-50 hidden bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto no-print">
+    <div class="bg-pine-900 border border-pine-750 rounded-3xl w-full max-w-md p-6 relative my-6 shadow-2xl">
+      <button type="button" onclick="window.closeEnquiryModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <div class="flex items-center gap-2 mb-1">
+        <i id="enq-modal-icon" class="fa-solid fa-hotel text-emerald-400 text-lg"></i>
+        <h3 id="enq-modal-title" class="text-base font-bold text-white">Hotel Enquiry</h3>
+      </div>
+      <p id="enq-modal-subtitle" class="text-[11px] text-slate-400 mb-4">Saved to admin bookings + synced to cloud.</p>
+      <input type="hidden" id="enq-type" value="hotel">
+      <input type="hidden" id="enq-item-id" value="">
+      <input type="hidden" id="enq-item-name" value="">
+      <input type="hidden" id="enq-price" value="0">
+      <form onsubmit="window.handleEnquiryBookingSubmit(event)" class="space-y-3 text-xs">
+        <div class="p-3 rounded-xl bg-pine-950 border border-pine-850">
+          <div class="text-[10px] uppercase font-bold text-slate-500">Selected</div>
+          <div id="enq-selected-label" class="text-sm font-bold text-white mt-0.5">—</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-400 uppercase mb-1">Your Name *</label>
+            <input type="text" id="enq-name" required placeholder="Full name" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-400 uppercase mb-1">WhatsApp *</label>
+            <input type="tel" id="enq-phone" required placeholder="+91 9XXXXXXXXX" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white">
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Email</label>
+          <input type="email" id="enq-email" placeholder="optional@email.com" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-400 uppercase mb-1">Check-in / Start</label>
+            <input type="date" id="enq-checkin" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-400 uppercase mb-1">Check-out / End</label>
+            <input type="date" id="enq-checkout" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white">
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Guests / Rooms</label>
+          <input type="text" id="enq-guests" placeholder="e.g. 2 adults, 1 room" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Notes</label>
+          <textarea id="enq-notes" rows="2" placeholder="Special requests..." class="w-full bg-pine-950 border border-pine-750 rounded-xl p-2.5 text-white"></textarea>
+        </div>
+        <button type="submit" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-saffron-500 text-pine-950 font-black uppercase text-xs shadow-lg active:scale-95 transition-all">
+          Submit Enquiry to Admin
+        </button>
+      </form>
+    </div>
+  </div>
+
   <!-- ================= ADMIN MODAL 1: ADD / EDIT CAB ================= -->
   <div id="cab-modal" class="fixed inset-0 z-50 hidden bg-black/85 backdrop-blur-md flex items-center justify-center p-4 no-print">
     <div class="bg-pine-900 border border-pine-750 rounded-3xl w-full max-w-md p-6 relative">
@@ -3296,7 +3355,7 @@
 
 
     /* =============================================================
-       FIREBASE REALTIME DATABASE LIVE SYNC (full multi-device: bookings + catalog)
+       FIREBASE REALTIME DATABASE LIVE SYNC (multi-device bookings)
        1. Create project: https://console.firebase.google.com
        2. Build → Realtime Database → Create (start in test mode)
        3. Project settings → General → Your apps → Web → copy config
@@ -3364,6 +3423,12 @@
         bookedAt: b.bookedAt || new Date().toISOString(),
         approvedAt: b.approvedAt || null,
         approvedBy: b.approvedBy || null,
+        bookingType: b.bookingType || "cab",
+        itemId: b.itemId || "",
+        itemName: b.itemName || "",
+        checkIn: b.checkIn || "",
+        checkOut: b.checkOut || "",
+        guests: b.guests || "",
         updatedAt: new Date().toISOString()
       };
     }
@@ -3392,7 +3457,13 @@
         notes: data.notes,
         bookedAt: data.bookedAt,
         approvedAt: data.approvedAt,
-        approvedBy: data.approvedBy
+        approvedBy: data.approvedBy,
+        bookingType: data.bookingType || "cab",
+        itemId: data.itemId || "",
+        itemName: data.itemName || "",
+        checkIn: data.checkIn || "",
+        checkOut: data.checkOut || "",
+        guests: data.guests || ""
       };
     }
 
@@ -3497,15 +3568,7 @@
       }
     }
 
-    /* =============================================================
-       FULL APP STATE SYNC (Firebase RTDB)
-       Syncs: fleet, drivers, packages, hotels, houseboats,
-       sightseeing, roadtrips, destinations, reviews, weather,
-       tickers, flashOffer, companyProfile, rateComparisons,
-       customers, auditLogs — plus bookings (separate path).
-       Bookings stay on /bookings for backward compatibility.
-       Everything else lives under /appState.
-    ============================================================= */
+    /* FULL APP STATE SYNC — fleet, drivers, packages, hotels, houseboats, etc. under /appState */
     let _appStateUnsub = null;
     let _syncInProgress = false;
     let _pushAllTimer = null;
@@ -3529,31 +3592,21 @@
         flashOffer: flashOffer || null,
         customers: customers || [],
         auditLogs: (auditLogs || []).slice(0, 50),
-        _meta: {
-          updatedAt: new Date().toISOString(),
-          source: "jandkcabs",
-          version: 1
-        }
+        _meta: { updatedAt: new Date().toISOString(), source: "jandkcabs", version: 1 }
       };
     }
 
     function simpleHash(obj) {
       try {
         return JSON.stringify(obj).length + ":" + (obj && obj._meta && obj._meta.updatedAt ? obj._meta.updatedAt : "");
-      } catch (e) {
-        return String(Date.now());
-      }
+      } catch (e) { return String(Date.now()); }
     }
 
     function applyAppStateFromRemote(remote, opts) {
       if (!remote || typeof remote !== "object") return false;
       const skipRender = opts && opts.skipRender;
       let changed = false;
-
-      if (remote.companyProfile && typeof remote.companyProfile === "object") {
-        companyProfile = remote.companyProfile;
-        changed = true;
-      }
+      if (remote.companyProfile && typeof remote.companyProfile === "object") { companyProfile = remote.companyProfile; changed = true; }
       if (Array.isArray(remote.rateComparisons)) { rateComparisons = remote.rateComparisons; changed = true; }
       if (Array.isArray(remote.destinations)) { destinations = remote.destinations; changed = true; }
       if (Array.isArray(remote.fleet)) { fleet = remote.fleet; changed = true; }
@@ -3566,15 +3619,10 @@
       if (Array.isArray(remote.reviews)) { reviewsList = remote.reviews; changed = true; }
       if (Array.isArray(remote.weather)) { weatherData = remote.weather; changed = true; }
       if (Array.isArray(remote.tickers)) { tickerItems = remote.tickers; changed = true; }
-      if (remote.flashOffer && typeof remote.flashOffer === "object") {
-        flashOffer = remote.flashOffer;
-        changed = true;
-      }
+      if (remote.flashOffer && typeof remote.flashOffer === "object") { flashOffer = remote.flashOffer; changed = true; }
       if (Array.isArray(remote.customers)) { customers = remote.customers; changed = true; }
       if (Array.isArray(remote.auditLogs)) { auditLogs = remote.auditLogs.slice(0, 50); changed = true; }
-
       if (!changed) return false;
-
       try {
         localStorage.setItem("jk_company_profile", JSON.stringify(companyProfile));
         localStorage.setItem("jk_rate_comparisons", JSON.stringify(rateComparisons));
@@ -3592,10 +3640,7 @@
         localStorage.setItem("jk_flashoffer", JSON.stringify(flashOffer));
         localStorage.setItem("jk_customers", JSON.stringify(customers));
         localStorage.setItem("jk_audit_logs", JSON.stringify(auditLogs.slice(-50)));
-      } catch (e) {
-        console.warn("[firebase] localStorage mirror failed:", e);
-      }
-
+      } catch (e) { console.warn("[firebase] localStorage mirror failed:", e); }
       if (!skipRender) {
         try {
           if (typeof window.populateSelectOptions === "function") window.populateSelectOptions();
@@ -3611,14 +3656,10 @@
           if (typeof window.renderRunningTicker === "function") window.renderRunningTicker();
           if (typeof window.renderFlashOffer === "function") window.renderFlashOffer();
           if (typeof window.applyCompanyProfileToDOM === "function") window.applyCompanyProfileToDOM();
-          if (typeof window.renderAdminDashboard === "function" && typeof isAdminLoggedIn !== "undefined" && isAdminLoggedIn) {
-            window.renderAdminDashboard();
-          }
+          if (typeof window.renderAdminDashboard === "function" && typeof isAdminLoggedIn !== "undefined" && isAdminLoggedIn) window.renderAdminDashboard();
           if (typeof window.renderAuditLogTable === "function") window.renderAuditLogTable();
           if (typeof window.recalculateMountainFare === "function") window.recalculateMountainFare();
-        } catch (re) {
-          console.warn("[firebase] re-render after sync:", re);
-        }
+        } catch (re) { console.warn("[firebase] re-render after sync:", re); }
       }
       return true;
     }
@@ -3634,19 +3675,13 @@
         console.info("[firebase] full appState synced to cloud");
       } catch (e) {
         console.warn("[firebase] push appState FAILED:", e);
-        const msg = (e && e.message) ? e.message : String(e);
-        if (/permission|PERMISSION_DENIED/i.test(msg) && typeof window.showToast === "function") {
-          window.showToast("Cloud sync permission denied. Check Firebase RTDB rules.", "error");
-        }
       }
     }
 
     function scheduleCloudPushAll() {
       if (!firebaseEnabled || !db) return;
       clearTimeout(_pushAllTimer);
-      _pushAllTimer = setTimeout(function() {
-        cloudPushAllState();
-      }, 600);
+      _pushAllTimer = setTimeout(function() { cloudPushAllState(); }, 600);
     }
 
     async function cloudSyncAllFromCloud() {
@@ -3654,7 +3689,6 @@
       _syncInProgress = true;
       try {
         await cloudSyncBookingsFromCloud();
-
         const snap = await db.ref("appState").once("value");
         const remote = snap.val();
         if (remote && typeof remote === "object") {
@@ -3675,7 +3709,6 @@
     function cloudSubscribeAll() {
       if (!firebaseEnabled || !db) return;
       cloudSubscribeBookings();
-
       if (_appStateUnsub) {
         try { db.ref("appState").off("value", _appStateUnsub); } catch (e) {}
         _appStateUnsub = null;
@@ -4377,8 +4410,6 @@
         } else {
           localStorage.removeItem("jk_driver_session");
         }
-
-        // Full multi-device cloud sync (fleet, packages, hotels, drivers, etc.)
         if (typeof scheduleCloudPushAll === "function") {
           scheduleCloudPushAll();
         }
@@ -6482,10 +6513,12 @@
               <span class="font-mono font-bold text-saffron-400 block">${window.escapeHtml(b.id)}</span>
               <strong class="text-white">${window.escapeHtml(b.name)}</strong>
               <div class="text-[10px] text-slate-400">${window.escapeHtml(b.phone)}</div>
+              ${b.bookingType && b.bookingType !== "cab" ? `<span class="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${b.bookingType === "hotel" ? "bg-emerald-500/20 text-emerald-300" : b.bookingType === "houseboat" ? "bg-cyan-500/20 text-cyan-300" : b.bookingType === "package" ? "bg-saffron-500/20 text-saffron-300" : "bg-slate-600/40 text-slate-300"}">${window.escapeHtml(b.bookingType)}</span>` : ""}
             </td>
             <td class="p-3">
               <span class="text-white block font-semibold">${window.escapeHtml(b.origin)}</span>
               <span class="text-slate-400 text-[10px]">&rarr; ${window.escapeHtml(b.destination)}</span>
+              ${b.guests ? `<div class="text-[10px] text-slate-500 mt-0.5">${window.escapeHtml(b.guests)}</div>` : ""}
             </td>
             <td class="p-3">
               <span class="text-white block font-medium">${window.escapeHtml(b.vehicle)}</span>
@@ -7360,6 +7393,7 @@
             <div class="flex items-center gap-2 mb-1 flex-wrap">
               <span class="font-mono font-bold text-saffron-400">${window.escapeHtml(b.id)}</span>
               <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${statusClass(b.status)}">${window.escapeHtml(b.status)}</span>
+              ${b.bookingType && b.bookingType !== "cab" ? `<span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-pine-800 text-slate-300">${window.escapeHtml(b.bookingType)}</span>` : ""}
             </div>
             <strong class="text-white text-sm block">${window.escapeHtml(b.origin)} &rarr; ${window.escapeHtml(b.destination)}</strong>
             <div class="text-slate-400 text-[11px] mt-0.5">${window.escapeHtml(b.vehicle)} • ${window.escapeHtml(b.datetime)}</div>
@@ -7583,35 +7617,150 @@
       `).join("") || '<div class="col-span-3 text-center text-slate-400 text-sm py-12">No sightseeing tours configured.</div>';
     };
 
+    window.openEnquiryModal = function(opts) {
+      const type = (opts && opts.type) || "hotel";
+      const itemId = (opts && opts.itemId) || "";
+      const itemName = (opts && opts.itemName) || "";
+      const price = (opts && opts.price) != null ? opts.price : 0;
+      const subtitle = (opts && opts.subtitle) || "";
+      document.getElementById("enq-type").value = type;
+      document.getElementById("enq-item-id").value = itemId;
+      document.getElementById("enq-item-name").value = itemName;
+      document.getElementById("enq-price").value = String(price);
+      document.getElementById("enq-selected-label").textContent = itemName + (subtitle ? " — " + subtitle : "");
+      const titleEl = document.getElementById("enq-modal-title");
+      const iconEl = document.getElementById("enq-modal-icon");
+      if (type === "hotel") {
+        titleEl.textContent = "Hotel Enquiry";
+        iconEl.className = "fa-solid fa-hotel text-emerald-400 text-lg";
+      } else if (type === "houseboat") {
+        titleEl.textContent = "Houseboat Enquiry";
+        iconEl.className = "fa-solid fa-ship text-cyan-400 text-lg";
+      } else if (type === "package") {
+        titleEl.textContent = "Package Enquiry";
+        iconEl.className = "fa-solid fa-suitcase-rolling text-saffron-400 text-lg";
+      } else {
+        titleEl.textContent = "Travel Enquiry";
+        iconEl.className = "fa-solid fa-envelope text-saffron-400 text-lg";
+      }
+      if (currentCustomer) {
+        if (currentCustomer.name) document.getElementById("enq-name").value = currentCustomer.name;
+        if (currentCustomer.phone) document.getElementById("enq-phone").value = currentCustomer.phone;
+        if (currentCustomer.email) document.getElementById("enq-email").value = currentCustomer.email;
+      }
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const d = tomorrow.toISOString().split("T")[0];
+      const cin = document.getElementById("enq-checkin");
+      if (cin && !cin.value) cin.value = d;
+      document.getElementById("enquiry-modal").classList.remove("hidden");
+    };
+
+    window.closeEnquiryModal = function() {
+      document.getElementById("enquiry-modal").classList.add("hidden");
+    };
+
+    window.handleEnquiryBookingSubmit = function(e) {
+      e.preventDefault();
+      const type = document.getElementById("enq-type").value || "hotel";
+      const itemId = document.getElementById("enq-item-id").value || "";
+      const itemName = document.getElementById("enq-item-name").value || "Enquiry";
+      const price = parseInt(document.getElementById("enq-price").value, 10) || 0;
+      const name = (document.getElementById("enq-name").value || "").trim();
+      const phoneRaw = (document.getElementById("enq-phone").value || "").replace(/\D/g, "");
+      const email = (document.getElementById("enq-email").value || "").trim();
+      const checkIn = document.getElementById("enq-checkin").value || "";
+      const checkOut = document.getElementById("enq-checkout").value || "";
+      const guests = (document.getElementById("enq-guests").value || "").trim();
+      const notes = (document.getElementById("enq-notes").value || "").trim();
+      if (!name || phoneRaw.length < 10) {
+        window.showToast("Please enter a valid name and WhatsApp number", "error");
+        return;
+      }
+      const phone = phoneRaw.length === 10 ? "+91 " + phoneRaw : "+" + phoneRaw;
+      const prefix = type === "hotel" ? "HT" : (type === "houseboat" ? "HB" : (type === "package" ? "PK" : "EN"));
+      const bookingId = "JK-" + prefix + "-" + Math.floor(1000 + Math.random() * 9000);
+      const typeLabel = type === "hotel" ? "Hotel" : (type === "houseboat" ? "Houseboat" : (type === "package" ? "Package" : "Enquiry"));
+      const dateLine = [checkIn, checkOut].filter(Boolean).join(" → ") || "Dates TBD";
+      const booking = {
+        id: bookingId,
+        name: name,
+        phone: phone,
+        rawPhone: phoneRaw,
+        email: email,
+        origin: typeLabel + " Enquiry",
+        destination: itemName,
+        vehicle: typeLabel,
+        datetime: dateLine,
+        fare: price,
+        baseFare: price,
+        addonsCost: 0,
+        status: "Pending",
+        driver: "Awaiting dispatch confirmation",
+        assignedDriverId: null,
+        addons: [],
+        pickupAddress: "",
+        dropAddress: "",
+        notes: notes || (typeLabel + " enquiry for " + itemName),
+        bookedAt: new Date().toISOString(),
+        approvedAt: null,
+        approvedBy: null,
+        bookingType: type,
+        itemId: itemId,
+        itemName: itemName,
+        checkIn: checkIn,
+        checkOut: checkOut,
+        guests: guests
+      };
+      bookings.unshift(booking);
+      saveState();
+      if (typeof cloudPushBooking === "function") cloudPushBooking(booking);
+      if (typeof window.logSecurityEvent === "function") {
+        window.logSecurityEvent("ENQUIRY_SUBMITTED", phone, bookingId, type.toUpperCase());
+      }
+      window.closeEnquiryModal();
+      window.updateBookingsCountBadge();
+      if (typeof window.renderAdminDashboard === "function" && isAdminLoggedIn) window.renderAdminDashboard();
+      window.showToast(typeLabel + " enquiry " + bookingId + " submitted. Admin will confirm shortly.", "success");
+      if (currentCustomer) {
+        setTimeout(function() {
+          if (typeof window.openMyBookingsModal === "function") window.openMyBookingsModal();
+        }, 400);
+      }
+    };
+
     window.bookPackageDirect = function(id) {
       const pkg = (packages || []).find(p => p.id === id);
       if (!pkg) return;
-      window.navigateTo('home');
-      window.setTripType('expedition');
-      const notes = document.getElementById('booking-notes');
-      if (notes) notes.value = `Tour Package: ${pkg.title} (${pkg.duration})`;
-      window.showToast(`Package "${pkg.title}" selected. Complete booking or contact dispatch.`, 'success');
+      window.openEnquiryModal({
+        type: "package",
+        itemId: pkg.id,
+        itemName: pkg.title,
+        price: pkg.price || 0,
+        subtitle: pkg.duration || ""
+      });
     };
     window.bookHotelDirect = function(id) {
       const h = (hotels || []).find(x => x.id === id);
       if (!h) return;
-      window.showToast(`Hotel enquiry: ${h.name}, ${h.location}. Our dispatch will confirm availability & rates.`, 'info');
-      // Could open inquiry form prefilled
-      window.navigateTo('contact');
-      setTimeout(() => {
-        const msg = document.getElementById('inq-message');
-        if (msg) msg.value = `Hotel booking request: ${h.name} (${h.location}) – ${h.rooms}. Preferred dates: `;
-      }, 300);
+      window.openEnquiryModal({
+        type: "hotel",
+        itemId: h.id,
+        itemName: h.name,
+        price: h.priceFrom || 0,
+        subtitle: (h.location || "") + (h.rooms ? " • " + h.rooms : "")
+      });
     };
     window.bookHouseboatDirect = function(id) {
       const hb = (houseboats || []).find(x => x.id === id);
       if (!hb) return;
-      window.showToast(`Houseboat enquiry: ${hb.name} on ${hb.lake}. Dispatch will confirm.`, 'info');
-      window.navigateTo('contact');
-      setTimeout(() => {
-        const msg = document.getElementById('inq-message');
-        if (msg) msg.value = `Houseboat booking: ${hb.name} (${hb.lake}) – ${hb.category}. Dates: `;
-      }, 300);
+      window.openEnquiryModal({
+        type: "houseboat",
+        itemId: hb.id,
+        itemName: hb.name,
+        price: hb.priceFrom || 0,
+        subtitle: (hb.lake || "") + (hb.category ? " • " + hb.category : "")
+      });
     };
     window.bookSightseeingDirect = function(id) {
       const s = (sightseeing || []).find(x => x.id === id);
@@ -7782,10 +7931,55 @@
     /* INQUIRY DISPATCH FORM */
     window.handleInquirySubmit = function(e) {
       e.preventDefault();
-      const name = document.getElementById("inq-name").value;
-      const phone = document.getElementById("inq-phone").value;
+      const name = (document.getElementById("inq-name").value || "").trim();
+      const phoneRaw = (document.getElementById("inq-phone").value || "").replace(/\D/g, "");
+      const message = (document.getElementById("inq-message").value || "").trim();
+      if (!name || phoneRaw.length < 10) {
+        window.showToast("Please enter a valid name and phone number", "error");
+        return;
+      }
+      const phone = phoneRaw.length === 10 ? "+91 " + phoneRaw : "+" + phoneRaw;
+      const bookingId = "JK-EN-" + Math.floor(1000 + Math.random() * 9000);
+      const booking = {
+        id: bookingId,
+        name: name,
+        phone: phone,
+        rawPhone: phoneRaw,
+        email: "",
+        origin: "Contact Enquiry",
+        destination: message.slice(0, 80) || "General inquiry",
+        vehicle: "Enquiry",
+        datetime: new Date().toLocaleString(),
+        fare: 0,
+        baseFare: 0,
+        addonsCost: 0,
+        status: "Pending",
+        driver: "Awaiting dispatch reply",
+        assignedDriverId: null,
+        addons: [],
+        pickupAddress: "",
+        dropAddress: "",
+        notes: message,
+        bookedAt: new Date().toISOString(),
+        approvedAt: null,
+        approvedBy: null,
+        bookingType: "inquiry",
+        itemId: "",
+        itemName: "Contact form",
+        checkIn: "",
+        checkOut: "",
+        guests: ""
+      };
+      bookings.unshift(booking);
+      saveState();
+      if (typeof cloudPushBooking === "function") cloudPushBooking(booking);
+      if (typeof window.logSecurityEvent === "function") {
+        window.logSecurityEvent("CONTACT_ENQUIRY", phone, bookingId, "FORM");
+      }
       e.target.reset();
-      window.showToast(`Thank you, ${name}! Inquiry routed to TRC Srinagar Control. We will WhatsApp you at ${phone}.`, "success");
+      window.updateBookingsCountBadge();
+      if (typeof window.renderAdminDashboard === "function" && isAdminLoggedIn) window.renderAdminDashboard();
+      window.showToast("Thank you, " + name + "! Enquiry " + bookingId + " saved. Dispatch will WhatsApp you at " + phone + ".", "success");
     };
 
     /* -------------------------------------------------------------
