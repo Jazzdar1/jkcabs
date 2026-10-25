@@ -6405,9 +6405,13 @@
     window.launchMailClient = function() {
       const b = activeBooking;
       if (!b) return;
+      if (typeof window.sendBookingEmail === "function") {
+        window.sendBookingEmail(b);
+        return;
+      }
       const subject = encodeURIComponent(`J&K Cabs Travel Pass Manifest - ${b.id}`);
-      const body = encodeURIComponent(`Salam ${b.name},\n\nYour mountain cab reservation ${b.id} with jandkcabs has been verified and confirmed.\n\nRoute: ${b.origin} to ${b.destination}\nPickup Address: ${b.pickupAddress || 'Confirmed Point'}\nVehicle: ${b.vehicle}\nDriver: ${b.driver}\nDate & Time: ${b.datetime}\nNet Fare Payable at Drop-off: INR ${b.fare}\nPayment Terms: Zero Advance / Pay on Arrival\n\nEmergency Tourist Police SOS: 112 / +91 194-2502274\nDirect Dispatch: +91 94190 54321`);
-      window.location.href = `mailto:${b.email}?subject=${subject}&body=${body}`;
+      const body = encodeURIComponent(`Salam ${b.name},\n\nYour reservation ${b.id} is confirmed.\n\nDetails: ${b.origin} to ${b.destination}\nDate: ${b.datetime}\nFare: INR ${b.fare}`);
+      window.location.href = `mailto:${b.email || ""}?subject=${subject}&body=${body}`;
     };
 
     /* -------------------------------------------------------------
@@ -6534,7 +6538,7 @@
             <td class="p-3 text-right space-x-1 whitespace-nowrap">
               ${b.status === "Pending" ? `
               <button onclick="window.adminApproveAndAssign('${b.id}')" class="px-2 py-1 rounded bg-emerald-500/20 border border-emerald-500 text-emerald-300 hover:bg-emerald-500 hover:text-pine-950 text-[10px] font-bold">
-                <i class="fa-solid fa-check"></i> Approve + Assign
+                <i class="fa-solid fa-check"></i> ${(b.bookingType && b.bookingType !== "cab") ? "Confirm Enquiry" : "Approve + Assign"}
               </button>` : ""}
               <button onclick="window.openEditBookingModal('${b.id}')" class="px-2 py-1 rounded bg-amber-500/20 border border-amber-500 text-amber-300 hover:bg-amber-500 hover:text-pine-950 text-[10px] font-bold">
                 <i class="fa-solid fa-pen-to-square"></i>
@@ -7216,11 +7220,133 @@
 
     /* BOOKING EDITING */
 
+    window.isStayEnquiry = function(b) {
+      const t = (b && b.bookingType) || "cab";
+      return t === "hotel" || t === "houseboat" || t === "package" || t === "inquiry";
+    };
+
+    window.buildConfirmationMessage = function(b) {
+      const type = (b.bookingType || "cab");
+      const biz = (companyProfile && companyProfile.businessName) || "jandkcabs";
+      const dispatch = (companyProfile && companyProfile.phoneDispatch) || "+91 94190 54321";
+      const fareLine = b.fare ? `Quoted / confirmed rate: INR ${Number(b.fare).toLocaleString()}` : "Rate: to be confirmed with dispatch";
+      if (type === "hotel") {
+        return `Salam ${b.name},\n\nYour *Hotel booking* is CONFIRMED.\n\nRef: ${b.id}\nHotel: ${b.itemName || b.destination}\nDates: ${b.datetime || ((b.checkIn || "") + " to " + (b.checkOut || ""))}\nGuests: ${b.guests || "—"}\n${fareLine}\nNotes: ${b.notes || "—"}\n\nPay on arrival / as agreed. Zero advance policy applies where stated.\n\nDispatch: ${dispatch}\n${biz}`;
+      }
+      if (type === "houseboat") {
+        return `Salam ${b.name},\n\nYour *Houseboat booking* is CONFIRMED.\n\nRef: ${b.id}\nHouseboat: ${b.itemName || b.destination}\nDates: ${b.datetime || ((b.checkIn || "") + " to " + (b.checkOut || ""))}\nGuests: ${b.guests || "—"}\n${fareLine}\nNotes: ${b.notes || "—"}\n\nDal Lake / Nigeen boarding details will be shared by dispatch.\n\nDispatch: ${dispatch}\n${biz}`;
+      }
+      if (type === "package") {
+        return `Salam ${b.name},\n\nYour *Tour package* enquiry is CONFIRMED.\n\nRef: ${b.id}\nPackage: ${b.itemName || b.destination}\nDates: ${b.datetime || "as discussed"}\nGuests: ${b.guests || "—"}\n${fareLine}\nNotes: ${b.notes || "—"}\n\nOur team will share the detailed itinerary and inclusions.\n\nDispatch: ${dispatch}\n${biz}`;
+      }
+      if (type === "inquiry") {
+        return `Salam ${b.name},\n\nWe received your enquiry (${b.id}) and our dispatch team has confirmed follow-up.\n\nDetails: ${b.notes || b.destination}\n\nWe will WhatsApp you shortly with options.\n\nDispatch: ${dispatch}\n${biz}`;
+      }
+      // cab
+      return `Salam ${b.name},\n\nYour *mountain cab* is CONFIRMED.\n\nRef: ${b.id}\nRoute: ${b.origin} → ${b.destination}\nVehicle: ${b.vehicle}\nDriver: ${b.driver}\nDate & Time: ${b.datetime}\nFare: INR ${Number(b.fare || 0).toLocaleString()} (pay on arrival)\n\nTourist Police SOS: 112\nDispatch: ${dispatch}\n${biz}`;
+    };
+
+    window.sendBookingWhatsApp = function(b) {
+      if (!b) return;
+      const phone = String(b.phone || b.rawPhone || "").replace(/\D/g, "");
+      if (!phone || phone.length < 10) {
+        window.showToast("No valid guest phone for WhatsApp", "error");
+        return;
+      }
+      const msg = window.buildConfirmationMessage(b);
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+    };
+
+    window.sendBookingEmail = function(b) {
+      if (!b) return;
+      const type = b.bookingType || "cab";
+      const subjectMap = {
+        hotel: `CONFIRMED: Hotel Booking ${b.id}`,
+        houseboat: `CONFIRMED: Houseboat Booking ${b.id}`,
+        package: `CONFIRMED: Package ${b.id}`,
+        inquiry: `Enquiry Update ${b.id}`,
+        cab: `CONFIRMED: Mountain Cab Pass ${b.id}`
+      };
+      const subject = encodeURIComponent(subjectMap[type] || subjectMap.cab);
+      const body = encodeURIComponent(window.buildConfirmationMessage(b));
+      const to = (b.email || "").trim();
+      if (!to) {
+        window.showToast("No email on this booking — WhatsApp still works", "info");
+        // still open mail client with blank to so admin can fill
+        window.location.href = `mailto:?subject=${subject}&body=${body}`;
+        return;
+      }
+      window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+    };
+
+    window.openPostConfirmActions = function(bookingId) {
+      const b = bookings.find(x => x.id === bookingId);
+      if (!b) return;
+      document.getElementById("admin-assign-modal")?.remove();
+      const type = b.bookingType || "cab";
+      const isStay = window.isStayEnquiry(b);
+      const title = isStay
+        ? (type === "hotel" ? "Hotel confirmed" : type === "houseboat" ? "Houseboat confirmed" : type === "package" ? "Package confirmed" : "Enquiry confirmed")
+        : "Cab confirmed — driver assigned";
+      const wrap = document.createElement("div");
+      wrap.id = "admin-confirm-actions-modal";
+      wrap.className = "fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4";
+      wrap.innerHTML = `
+        <div class="bg-pine-900 border border-pine-750 rounded-2xl p-5 max-w-md w-full space-y-4 text-xs">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-circle-check text-emerald-400"></i> ${window.escapeHtml(title)}
+          </h3>
+          <p class="text-slate-300"><strong class="text-saffron-400">${window.escapeHtml(b.id)}</strong> — ${window.escapeHtml(b.name)}</p>
+          <p class="text-slate-400">${window.escapeHtml(b.origin)} → ${window.escapeHtml(b.destination)}</p>
+          ${!isStay ? `<p class="text-emerald-300"><i class="fa-solid fa-id-card mr-1"></i>Driver: ${window.escapeHtml(b.driver)}</p>` : `<p class="text-emerald-300"><i class="fa-solid fa-bed mr-1"></i>${window.escapeHtml(b.itemName || b.vehicle)} • ${window.escapeHtml(b.datetime)}</p>`}
+          <p class="text-[11px] text-slate-400">Send confirmation to the guest:</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button type="button" onclick="window.sendBookingWhatsApp(bookings.find(x=>x.id==='${bookingId}'));" class="px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black flex items-center justify-center gap-2">
+              <i class="fa-brands fa-whatsapp text-lg"></i> WhatsApp Guest
+            </button>
+            <button type="button" onclick="window.sendBookingEmail(bookings.find(x=>x.id==='${bookingId}'));" class="px-3 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black flex items-center justify-center gap-2">
+              <i class="fa-solid fa-envelope"></i> Email Guest
+            </button>
+          </div>
+          <button type="button" onclick="document.getElementById('admin-confirm-actions-modal')?.remove()" class="w-full px-3 py-2 rounded-xl bg-pine-800 text-slate-300 font-bold">Done</button>
+        </div>`;
+      document.body.appendChild(wrap);
+    };
+
     window.adminApproveAndAssign = function(bookingId) {
       const b = bookings.find(x => x.id === bookingId);
       if (!b) return;
 
-      // Build driver options
+      // Hotel / houseboat / package / contact enquiry — no driver assignment
+      if (window.isStayEnquiry(b)) {
+        const typeLabel = b.bookingType === "hotel" ? "Hotel" : b.bookingType === "houseboat" ? "Houseboat" : b.bookingType === "package" ? "Package" : "Enquiry";
+        const wrap = document.createElement("div");
+        wrap.id = "admin-assign-modal";
+        wrap.className = "fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4";
+        wrap.innerHTML = `
+          <div class="bg-pine-900 border border-pine-750 rounded-2xl p-5 max-w-md w-full space-y-4 text-xs">
+            <h3 class="text-base font-bold text-white">Confirm ${window.escapeHtml(typeLabel)} Booking</h3>
+            <p class="text-slate-400">Ref <strong class="text-saffron-400">${window.escapeHtml(b.id)}</strong> — ${window.escapeHtml(b.name)}</p>
+            <p class="text-white font-semibold">${window.escapeHtml(b.itemName || b.destination)}</p>
+            <p class="text-slate-300">${window.escapeHtml(b.datetime || "Dates TBD")} ${b.guests ? "• " + window.escapeHtml(b.guests) : ""}</p>
+            <div>
+              <label class="block font-bold text-slate-400 uppercase mb-1">Confirmed rate (₹)</label>
+              <input type="number" id="confirm-stay-fare" value="${Number(b.fare) || 0}" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-3 text-white">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-400 uppercase mb-1">Admin note to guest (optional)</label>
+              <textarea id="confirm-stay-note" rows="2" placeholder="e.g. Deluxe room lake view confirmed, check-in 2 PM" class="w-full bg-pine-950 border border-pine-750 rounded-xl p-3 text-white"></textarea>
+            </div>
+            <div class="flex gap-2 justify-end">
+              <button type="button" onclick="document.getElementById('admin-assign-modal').remove()" class="px-3 py-2 rounded-xl bg-pine-800 text-slate-300 font-bold">Cancel</button>
+              <button type="button" onclick="window.confirmStayEnquiry('${bookingId}')" class="px-3 py-2 rounded-xl bg-emerald-500 text-pine-950 font-black">Confirm Booking</button>
+            </div>
+          </div>`;
+        document.body.appendChild(wrap);
+        return;
+      }
+
+      // Cab: assign driver
       const driverOptions = (drivers || []).map((d, i) =>
         `<option value="${i}">${window.escapeHtml(d.name)} — ${window.escapeHtml(d.phone)} (${window.escapeHtml(d.assignedCab || "Any")})</option>`
       ).join("");
@@ -7247,6 +7373,32 @@
       document.body.appendChild(wrap);
     };
 
+    window.confirmStayEnquiry = function(bookingId) {
+      const bIdx = bookings.findIndex(x => x.id === bookingId);
+      if (bIdx === -1) return;
+      const fareEl = document.getElementById("confirm-stay-fare");
+      const noteEl = document.getElementById("confirm-stay-note");
+      const fare = fareEl ? (parseInt(fareEl.value, 10) || 0) : bookings[bIdx].fare;
+      const extraNote = noteEl ? (noteEl.value || "").trim() : "";
+      bookings[bIdx].status = "Confirmed";
+      bookings[bIdx].fare = fare;
+      bookings[bIdx].driver = "Stay confirmed — no vehicle";
+      bookings[bIdx].assignedDriverId = null;
+      bookings[bIdx].approvedAt = new Date().toLocaleString();
+      bookings[bIdx].approvedBy = "admin";
+      if (extraNote) {
+        bookings[bIdx].notes = (bookings[bIdx].notes ? bookings[bIdx].notes + " | " : "") + "Admin: " + extraNote;
+      }
+      saveState();
+      if (typeof supabasePushBooking === "function") supabasePushBooking(bookings[bIdx]);
+      window.logSecurityEvent("STAY_ENQUIRY_CONFIRMED", "admin", bookingId, (bookings[bIdx].bookingType || "stay").toUpperCase());
+      document.getElementById("admin-assign-modal")?.remove();
+      window.renderAdminDashboard();
+      window.updateBookingsCountBadge();
+      window.showToast(`${bookings[bIdx].bookingType || "Enquiry"} ${bookingId} confirmed.`, "success");
+      window.openPostConfirmActions(bookingId);
+    };
+
     window.confirmApproveAssign = function(bookingId) {
       const bIdx = bookings.findIndex(x => x.id === bookingId);
       if (bIdx === -1) return;
@@ -7268,11 +7420,8 @@
       document.getElementById("admin-assign-modal")?.remove();
       window.renderAdminDashboard();
       window.updateBookingsCountBadge();
-      window.showToast(`Booking ${bookingId} approved. Driver ${d.name} assigned. GPS will track this driver.`, "success");
-      // Switch to GPS tab hint
-      if (typeof window.switchAdminTab === "function") {
-        // optional: user can open GPS
-      }
+      window.showToast(`Booking ${bookingId} approved. Driver ${d.name} assigned.`, "success");
+      window.openPostConfirmActions(bookingId);
     };
 
     window.openEditBookingModal = function(id) {
@@ -7397,10 +7546,12 @@
             </div>
             <strong class="text-white text-sm block">${window.escapeHtml(b.origin)} &rarr; ${window.escapeHtml(b.destination)}</strong>
             <div class="text-slate-400 text-[11px] mt-0.5">${window.escapeHtml(b.vehicle)} • ${window.escapeHtml(b.datetime)}</div>
-            <div class="text-[10px] font-semibold mt-1 ${b.driver && b.driver !== "Awaiting assignment" ? "text-emerald-400" : "text-amber-400"}">
-              <i class="fa-solid fa-user-shield mr-1"></i>Driver: ${window.escapeHtml(b.driver || "Awaiting admin assignment")}
+            <div class="text-[10px] font-semibold mt-1 ${b.status === "Confirmed" ? "text-emerald-400" : "text-amber-400"}">
+              ${(b.bookingType && b.bookingType !== "cab")
+                ? `<i class="fa-solid fa-bed mr-1"></i>${b.status === "Confirmed" ? "Stay / package confirmed" : "Awaiting hotel confirmation"}`
+                : `<i class="fa-solid fa-user-shield mr-1"></i>Driver: ${window.escapeHtml(b.driver || "Awaiting admin assignment")}`}
             </div>
-            ${b.status === "Pending" ? '<div class="text-[10px] text-amber-300 mt-1">Waiting for admin approval & driver assignment</div>' : ''}
+            ${b.status === "Pending" ? `<div class="text-[10px] text-amber-300 mt-1">${(b.bookingType && b.bookingType !== "cab") ? "Waiting for admin confirmation" : "Waiting for admin approval & driver assignment"}</div>` : ''}
           </div>
           <div class="flex items-center gap-2 justify-between sm:justify-end border-t sm:border-t-0 border-pine-850 pt-2 sm:pt-0">
             <span class="font-black text-white text-sm">₹${b.fare.toLocaleString()}</span>
