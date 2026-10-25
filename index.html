@@ -3296,7 +3296,7 @@
 
 
     /* =============================================================
-       FIREBASE REALTIME DATABASE LIVE SYNC (multi-device bookings)
+       FIREBASE REALTIME DATABASE LIVE SYNC (full multi-device: bookings + catalog)
        1. Create project: https://console.firebase.google.com
        2. Build → Realtime Database → Create (start in test mode)
        3. Project settings → General → Your apps → Web → copy config
@@ -3491,9 +3491,213 @@
           pin: d.pin || "1234",
           updatedAt: new Date().toISOString()
         });
+        scheduleCloudPushAll();
       } catch (e) {
         console.warn("[firebase] push driver:", e);
       }
+    }
+
+    /* =============================================================
+       FULL APP STATE SYNC (Firebase RTDB)
+       Syncs: fleet, drivers, packages, hotels, houseboats,
+       sightseeing, roadtrips, destinations, reviews, weather,
+       tickers, flashOffer, companyProfile, rateComparisons,
+       customers, auditLogs — plus bookings (separate path).
+       Bookings stay on /bookings for backward compatibility.
+       Everything else lives under /appState.
+    ============================================================= */
+    let _appStateUnsub = null;
+    let _syncInProgress = false;
+    let _pushAllTimer = null;
+    let _lastAppStateHash = "";
+
+    function buildAppStatePayload() {
+      return {
+        companyProfile: companyProfile || null,
+        rateComparisons: rateComparisons || [],
+        destinations: destinations || [],
+        fleet: fleet || [],
+        drivers: drivers || [],
+        roadtrips: roadtrips || [],
+        packages: packages || [],
+        hotels: hotels || [],
+        houseboats: houseboats || [],
+        sightseeing: sightseeing || [],
+        reviews: reviewsList || [],
+        weather: weatherData || [],
+        tickers: tickerItems || [],
+        flashOffer: flashOffer || null,
+        customers: customers || [],
+        auditLogs: (auditLogs || []).slice(0, 50),
+        _meta: {
+          updatedAt: new Date().toISOString(),
+          source: "jandkcabs",
+          version: 1
+        }
+      };
+    }
+
+    function simpleHash(obj) {
+      try {
+        return JSON.stringify(obj).length + ":" + (obj && obj._meta && obj._meta.updatedAt ? obj._meta.updatedAt : "");
+      } catch (e) {
+        return String(Date.now());
+      }
+    }
+
+    function applyAppStateFromRemote(remote, opts) {
+      if (!remote || typeof remote !== "object") return false;
+      const skipRender = opts && opts.skipRender;
+      let changed = false;
+
+      if (remote.companyProfile && typeof remote.companyProfile === "object") {
+        companyProfile = remote.companyProfile;
+        changed = true;
+      }
+      if (Array.isArray(remote.rateComparisons)) { rateComparisons = remote.rateComparisons; changed = true; }
+      if (Array.isArray(remote.destinations)) { destinations = remote.destinations; changed = true; }
+      if (Array.isArray(remote.fleet)) { fleet = remote.fleet; changed = true; }
+      if (Array.isArray(remote.drivers)) { drivers = remote.drivers; changed = true; }
+      if (Array.isArray(remote.roadtrips)) { roadtrips = remote.roadtrips; changed = true; }
+      if (Array.isArray(remote.packages)) { packages = remote.packages; changed = true; }
+      if (Array.isArray(remote.hotels)) { hotels = remote.hotels; changed = true; }
+      if (Array.isArray(remote.houseboats)) { houseboats = remote.houseboats; changed = true; }
+      if (Array.isArray(remote.sightseeing)) { sightseeing = remote.sightseeing; changed = true; }
+      if (Array.isArray(remote.reviews)) { reviewsList = remote.reviews; changed = true; }
+      if (Array.isArray(remote.weather)) { weatherData = remote.weather; changed = true; }
+      if (Array.isArray(remote.tickers)) { tickerItems = remote.tickers; changed = true; }
+      if (remote.flashOffer && typeof remote.flashOffer === "object") {
+        flashOffer = remote.flashOffer;
+        changed = true;
+      }
+      if (Array.isArray(remote.customers)) { customers = remote.customers; changed = true; }
+      if (Array.isArray(remote.auditLogs)) { auditLogs = remote.auditLogs.slice(0, 50); changed = true; }
+
+      if (!changed) return false;
+
+      try {
+        localStorage.setItem("jk_company_profile", JSON.stringify(companyProfile));
+        localStorage.setItem("jk_rate_comparisons", JSON.stringify(rateComparisons));
+        localStorage.setItem("jk_destinations", JSON.stringify(destinations));
+        localStorage.setItem("jk_fleet", JSON.stringify(fleet));
+        localStorage.setItem("jk_drivers", JSON.stringify(drivers));
+        localStorage.setItem("jk_roadtrips", JSON.stringify(roadtrips));
+        localStorage.setItem("jk_packages", JSON.stringify(packages || []));
+        localStorage.setItem("jk_hotels", JSON.stringify(hotels || []));
+        localStorage.setItem("jk_houseboats", JSON.stringify(houseboats || []));
+        localStorage.setItem("jk_sightseeing", JSON.stringify(sightseeing || []));
+        localStorage.setItem("jk_reviews", JSON.stringify(reviewsList));
+        localStorage.setItem("jk_weather", JSON.stringify(weatherData));
+        localStorage.setItem("jk_tickers", JSON.stringify(tickerItems));
+        localStorage.setItem("jk_flashoffer", JSON.stringify(flashOffer));
+        localStorage.setItem("jk_customers", JSON.stringify(customers));
+        localStorage.setItem("jk_audit_logs", JSON.stringify(auditLogs.slice(-50)));
+      } catch (e) {
+        console.warn("[firebase] localStorage mirror failed:", e);
+      }
+
+      if (!skipRender) {
+        try {
+          if (typeof window.populateSelectOptions === "function") window.populateSelectOptions();
+          if (typeof window.renderFleetCards === "function") window.renderFleetCards(fleet);
+          if (typeof window.renderRoadTrips === "function") window.renderRoadTrips();
+          if (typeof window.renderPackages === "function") window.renderPackages();
+          if (typeof window.renderHotels === "function") window.renderHotels();
+          if (typeof window.renderHouseboats === "function") window.renderHouseboats();
+          if (typeof window.renderSightseeing === "function") window.renderSightseeing();
+          if (typeof window.renderRateComparisons === "function") window.renderRateComparisons();
+          if (typeof window.renderReviews === "function") window.renderReviews();
+          if (typeof window.renderWeather === "function") window.renderWeather();
+          if (typeof window.renderRunningTicker === "function") window.renderRunningTicker();
+          if (typeof window.renderFlashOffer === "function") window.renderFlashOffer();
+          if (typeof window.applyCompanyProfileToDOM === "function") window.applyCompanyProfileToDOM();
+          if (typeof window.renderAdminDashboard === "function" && typeof isAdminLoggedIn !== "undefined" && isAdminLoggedIn) {
+            window.renderAdminDashboard();
+          }
+          if (typeof window.renderAuditLogTable === "function") window.renderAuditLogTable();
+          if (typeof window.recalculateMountainFare === "function") window.recalculateMountainFare();
+        } catch (re) {
+          console.warn("[firebase] re-render after sync:", re);
+        }
+      }
+      return true;
+    }
+
+    async function cloudPushAllState() {
+      if (!firebaseEnabled || !db || _syncInProgress) return;
+      try {
+        const payload = buildAppStatePayload();
+        const h = simpleHash(payload);
+        if (h === _lastAppStateHash) return;
+        await db.ref("appState").set(payload);
+        _lastAppStateHash = h;
+        console.info("[firebase] full appState synced to cloud");
+      } catch (e) {
+        console.warn("[firebase] push appState FAILED:", e);
+        const msg = (e && e.message) ? e.message : String(e);
+        if (/permission|PERMISSION_DENIED/i.test(msg) && typeof window.showToast === "function") {
+          window.showToast("Cloud sync permission denied. Check Firebase RTDB rules.", "error");
+        }
+      }
+    }
+
+    function scheduleCloudPushAll() {
+      if (!firebaseEnabled || !db) return;
+      clearTimeout(_pushAllTimer);
+      _pushAllTimer = setTimeout(function() {
+        cloudPushAllState();
+      }, 600);
+    }
+
+    async function cloudSyncAllFromCloud() {
+      if (!firebaseEnabled || !db) return;
+      _syncInProgress = true;
+      try {
+        await cloudSyncBookingsFromCloud();
+
+        const snap = await db.ref("appState").once("value");
+        const remote = snap.val();
+        if (remote && typeof remote === "object") {
+          _lastAppStateHash = simpleHash(remote);
+          applyAppStateFromRemote(remote, { skipRender: false });
+          console.info("[firebase] appState loaded from cloud");
+        } else {
+          console.info("[firebase] appState empty — seeding from this device");
+          await cloudPushAllState();
+        }
+      } catch (e) {
+        console.warn("[firebase] cloudSyncAllFromCloud:", e);
+      } finally {
+        _syncInProgress = false;
+      }
+    }
+
+    function cloudSubscribeAll() {
+      if (!firebaseEnabled || !db) return;
+      cloudSubscribeBookings();
+
+      if (_appStateUnsub) {
+        try { db.ref("appState").off("value", _appStateUnsub); } catch (e) {}
+        _appStateUnsub = null;
+      }
+      _appStateUnsub = function(snap) {
+        if (_syncInProgress) return;
+        const remote = snap.val();
+        if (!remote || typeof remote !== "object") return;
+        const h = simpleHash(remote);
+        if (h === _lastAppStateHash) return;
+        _lastAppStateHash = h;
+        _syncInProgress = true;
+        try {
+          applyAppStateFromRemote(remote, { skipRender: false });
+          console.info("[firebase] live appState update applied");
+        } finally {
+          _syncInProgress = false;
+        }
+      };
+      db.ref("appState").on("value", _appStateUnsub, function(err) {
+        console.warn("[firebase] appState listen error:", err);
+      });
     }
 
     // Aliases so existing call sites keep working
@@ -3504,6 +3708,8 @@
     function initSupabase() { return initFirebase(); }
     async function supabaseSyncBookingsFromCloud() { return cloudSyncBookingsFromCloud(); }
     function supabaseSubscribeBookings() { return cloudSubscribeBookings(); }
+    async function supabaseSyncAllFromCloud() { return cloudSyncAllFromCloud(); }
+    function supabaseSubscribeAll() { return cloudSubscribeAll(); }
 
 
     const DEFAULT_COMPANY_PROFILE = {
@@ -4171,6 +4377,11 @@
         } else {
           localStorage.removeItem("jk_driver_session");
         }
+
+        // Full multi-device cloud sync (fleet, packages, hotels, drivers, etc.)
+        if (typeof scheduleCloudPushAll === "function") {
+          scheduleCloudPushAll();
+        }
       } catch (err) {
         console.error("[Data Loss Prevention Alert] LocalStorage write error:", err);
         window.showToast("Local memory limit reached. Export your backup vault.", "error");
@@ -4223,8 +4434,8 @@
       // Portal-specific init
       if (pageId === "admin") {
         window.checkAdminSessionState();
-        if (typeof firebaseEnabled !== "undefined" && firebaseEnabled && typeof cloudSyncBookingsFromCloud === "function") {
-          cloudSyncBookingsFromCloud().then(() => {
+        if (typeof firebaseEnabled !== "undefined" && firebaseEnabled && typeof cloudSyncAllFromCloud === "function") {
+          cloudSyncAllFromCloud().then(() => {
             if (typeof window.renderAdminDashboard === "function") window.renderAdminDashboard();
           });
         }
@@ -4315,10 +4526,10 @@
         lastAdminActivity = Date.now();
         window.startInactivityTracker();
         window.checkAdminSessionState();
-        if (typeof firebaseEnabled !== "undefined" && firebaseEnabled && typeof cloudSyncBookingsFromCloud === "function") {
-          cloudSyncBookingsFromCloud().then(() => {
+        if (typeof firebaseEnabled !== "undefined" && firebaseEnabled && typeof cloudSyncAllFromCloud === "function") {
+          cloudSyncAllFromCloud().then(() => {
             if (typeof window.renderAdminDashboard === "function") window.renderAdminDashboard();
-            window.showToast("Loaded bookings from cloud", "info");
+            window.showToast("Full cloud sync complete (bookings + catalog)", "info");
           });
         } else {
           window.showToast("Cloud sync OFF — only this device data is visible", "info");
@@ -7583,8 +7794,8 @@
     window.addEventListener("DOMContentLoaded", () => {
       initFirebase();
       if (firebaseEnabled) {
-        cloudSyncBookingsFromCloud().then(() => {
-          cloudSubscribeBookings();
+        cloudSyncAllFromCloud().then(() => {
+          cloudSubscribeAll();
         });
       }
       const tomorrow = new Date();
